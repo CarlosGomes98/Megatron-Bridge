@@ -137,6 +137,7 @@ def evaluate(
                 micro_batch_size=state.cfg.train.micro_batch_size,
                 forward_only=True,
             )
+            torch.cuda.synchronize()
             fault_tolerance.on_eval_step_end(state)
             config.timers = state.timers
 
