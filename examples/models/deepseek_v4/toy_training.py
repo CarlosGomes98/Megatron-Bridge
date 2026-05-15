@@ -29,6 +29,7 @@ from megatron.bridge.training.config import GPTDatasetConfig
 from megatron.bridge.training.gpt_step import forward_step
 from megatron.bridge.training.mixed_precision import bf16_mixed, bf16_with_mxfp8_mixed
 from megatron.bridge.training.pretrain import pretrain
+from megatron.bridge.training.tokenizers.config import TokenizerConfig
 
 
 CASES = ("adam", "muon", "adam_mxfp8", "muon_mxfp8")
@@ -49,6 +50,21 @@ def _c4_blend_per_split(data_dir: str, dataset_name: str) -> list[tuple[list[str
         ([validation_path], None),
         ([validation_path], None),
     ]
+
+
+def get_tokenizer_config(args: argparse.Namespace, cfg) -> TokenizerConfig:
+    if args.data_dir is None:
+        return TokenizerConfig(
+            tokenizer_type="NullTokenizer",
+            vocab_size=cfg.model.vocab_size,
+        )
+
+    cfg.model.tokenizer = args.tokenizer_model or str(Path(args.data_dir) / "tokenizer")
+    return TokenizerConfig(
+        tokenizer_type="HuggingFaceTokenizer",
+        tokenizer_model=cfg.model.tokenizer,
+        hf_tokenizer_kwargs={"use_fast": True},
+    )
 
 
 def _make_hf_config(hf_config_path: str, seq_length: int, model_size: str):
@@ -265,16 +281,12 @@ def _configure_optimizer_and_precision(cfg, args: argparse.Namespace) -> None:
 def build_config(args: argparse.Namespace):
     cfg = _pretrain_common()
     cfg.model = _build_model_provider(args)
+    cfg.tokenizer = get_tokenizer_config(args, cfg)
 
     cfg.dataset.blend = None
     if args.data_dir is None:
-        cfg.tokenizer.tokenizer_type = "NullTokenizer"
-        cfg.tokenizer.tokenizer_model = None
-        cfg.tokenizer.vocab_size = cfg.model.vocab_size
         cfg.dataset.blend_per_split = None
     else:
-        cfg.tokenizer.tokenizer_type = "HuggingFaceTokenizer"
-        cfg.tokenizer.tokenizer_model = args.tokenizer_model or str(Path(args.data_dir) / "tokenizer")
         cfg.dataset = GPTDatasetConfig(
             dataloader_type="single",
             blend_per_split=_c4_blend_per_split(args.data_dir, args.dataset_name),
