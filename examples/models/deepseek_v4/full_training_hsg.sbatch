@@ -1,6 +1,7 @@
 #!/bin/bash
 # One-iteration DeepSeek-V4-Flash full-config training smoke on HSG.
-# This uses the real HF config, random initialization, Adam, and mock GPT data.
+# This uses the real HF config, Adam, and mock GPT data. Set LOAD_CHECKPOINT to
+# initialize from an already-converted Megatron-Core checkpoint instead of random init.
 
 #SBATCH --job-name=coreai_dlalgo_llm-mbridge:dsv4-full-adam
 #SBATCH --account=coreai_dlalgo_llm
@@ -21,6 +22,7 @@ FHT_SITE=${FHT_SITE:-/lustre/fsw/portfolios/coreai/users/chcui/parity/dsv4_cudnn
 TRANSFORMERS_SITE=${TRANSFORMERS_SITE:-/lustre/fsw/portfolios/coreai/users/chcui/training/dsv4_transformers_5_8_1_nodeps}
 HF_CONFIG=${HF_CONFIG:-/lustre/fsw/portfolios/coreai/users/weijiac/models/deepseek-ai/DeepSeek-V4-Flash}
 OUTDIR=${OUTDIR:-/lustre/fsw/portfolios/coreai/users/chcui/training/dsv4_full_adam}
+LOAD_CHECKPOINT=${LOAD_CHECKPOINT:-}
 MOE_TOKEN_DISPATCHER_TYPE=${MOE_TOKEN_DISPATCHER_TYPE:-alltoall}
 NCCL_PXN_DISABLE=${NCCL_PXN_DISABLE:-1}
 
@@ -54,6 +56,7 @@ echo "seq_length=$SEQ_LENGTH train_iters=$TRAIN_ITERS gbs=$GLOBAL_BATCH_SIZE mbs
 echo "workdir=$WORKDIR"
 echo "hf_config=$HF_CONFIG"
 echo "outdir=$OUTDIR"
+echo "load_checkpoint=${LOAD_CHECKPOINT:-<none>}"
 echo "transformers_site=$TRANSFORMERS_SITE"
 echo "moe_token_dispatcher_type=$MOE_TOKEN_DISPATCHER_TYPE"
 echo "nccl_pxn_disable=$NCCL_PXN_DISABLE"
@@ -81,6 +84,10 @@ srun --mpi=pmix \
     export PYTHONPATH=$TRANSFORMERS_SITE:$FHT_SITE:$WORKDIR/src:$MCORE_DIR:\${PYTHONPATH:-}
     source $WORKDIR/examples/models/deepseek_v4/hsg_runtime.sh
     ensure_transformers_site $TRANSFORMERS_SITE
+    load_checkpoint_arg=()
+    if [[ -n \"$LOAD_CHECKPOINT\" ]]; then
+      load_checkpoint_arg=(--load-checkpoint \"$LOAD_CHECKPOINT\")
+    fi
     uv run --no-sync python -m torch.distributed.run \
       --nproc_per_node=$NPROC_PER_NODE \
       --nnodes=$SLURM_JOB_NUM_NODES \
@@ -101,7 +108,8 @@ srun --mpi=pmix \
       --context-parallel-size $CP \
       --expert-parallel-size $EP \
       --moe-token-dispatcher-type $MOE_TOKEN_DISPATCHER_TYPE \
-      --csa-backend unfused
+      --csa-backend unfused \
+      \"\${load_checkpoint_arg[@]}\"
   "
 
 echo "Exit $?"

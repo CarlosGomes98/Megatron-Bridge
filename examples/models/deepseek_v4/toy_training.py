@@ -278,6 +278,7 @@ def build_config(args: argparse.Namespace):
 
     cfg.checkpoint.save = None
     cfg.checkpoint.load = None
+    cfg.checkpoint.pretrained_checkpoint = args.load_checkpoint
     cfg.checkpoint.save_interval = None
 
     cfg.dist.enable_megatron_core_experimental = True
@@ -295,6 +296,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-size", choices=("toy", "full"), default="toy")
     parser.add_argument("--hf-config-path", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--load-checkpoint", default=None)
     parser.add_argument("--seq-length", type=int, default=128)
     parser.add_argument("--train-iters", type=int, default=3)
     parser.add_argument("--micro-batch-size", type=int, default=1)
