@@ -38,6 +38,18 @@ def _print_rank0(message: str) -> None:
         print(message, flush=True)
 
 
+def _c4_blend_per_split(data_dir: str, dataset_name: str) -> list[tuple[list[str], list[float] | None]]:
+    data_path = Path(data_dir)
+    train_shards = [6] if dataset_name == "8b" else [6, 7]
+    train_paths = [str(data_path / f"c4-train.en_{idx}_text_document") for idx in train_shards]
+    validation_path = str(data_path / "c4-validation-91205-samples.en_text_document")
+    return [
+        (train_paths, [50.0] * len(train_paths)),
+        ([validation_path], None),
+        ([validation_path], None),
+    ]
+
+
 def _make_hf_config(hf_config_path: str, seq_length: int, model_size: str):
     hf_cfg = AutoConfig.from_pretrained(hf_config_path, trust_remote_code=True)
 
@@ -253,12 +265,19 @@ def build_config(args: argparse.Namespace):
     cfg = _pretrain_common()
     cfg.model = _build_model_provider(args)
 
-    cfg.tokenizer.tokenizer_type = "NullTokenizer"
-    cfg.tokenizer.tokenizer_model = None
-    cfg.tokenizer.vocab_size = cfg.model.vocab_size
-
     cfg.dataset.blend = None
-    cfg.dataset.blend_per_split = None
+    if args.data_dir is None:
+        cfg.tokenizer.tokenizer_type = "NullTokenizer"
+        cfg.tokenizer.tokenizer_model = None
+        cfg.tokenizer.vocab_size = cfg.model.vocab_size
+        cfg.dataset.blend_per_split = None
+    else:
+        cfg.tokenizer.tokenizer_type = "HuggingFaceTokenizer"
+        cfg.tokenizer.tokenizer_model = args.tokenizer_model or str(Path(args.data_dir) / "tokenizer")
+        cfg.tokenizer.hf_tokenizer_kwargs = {"use_fast": True}
+        cfg.dataset.blend_per_split = _c4_blend_per_split(args.data_dir, args.dataset_name)
+        cfg.dataset.path_to_cache = args.path_to_cache
+
     cfg.dataset.seq_length = args.seq_length
     cfg.dataset.num_workers = 0
     cfg.dataset.skip_getting_attention_mask_from_dataset = True
@@ -270,8 +289,8 @@ def build_config(args: argparse.Namespace):
     cfg.train.manual_gc = True
     cfg.train.manual_gc_interval = 1
     cfg.train.manual_gc_eval = 1
-    cfg.validation.eval_interval = None
-    cfg.validation.eval_iters = 0
+    cfg.validation.eval_interval = args.eval_interval if args.eval_iters > 0 and args.eval_interval > 0 else None
+    cfg.validation.eval_iters = args.eval_iters
 
     cfg.logger.log_interval = 1
     cfg.logger.tensorboard_dir = str(Path(args.output_dir) / args.case / "tb")
@@ -297,8 +316,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hf-config-path", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--load-checkpoint", default=None)
+    parser.add_argument("--data-dir", default=None)
+    parser.add_argument("--dataset-name", default="8b")
+    parser.add_argument("--tokenizer-model", default=None)
+    parser.add_argument("--path-to-cache", default=None)
     parser.add_argument("--seq-length", type=int, default=128)
     parser.add_argument("--train-iters", type=int, default=3)
+    parser.add_argument("--eval-interval", type=int, default=0)
+    parser.add_argument("--eval-iters", type=int, default=0)
     parser.add_argument("--micro-batch-size", type=int, default=1)
     parser.add_argument("--global-batch-size", type=int, default=4)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)

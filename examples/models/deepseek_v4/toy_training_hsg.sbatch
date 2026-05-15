@@ -4,28 +4,34 @@
 #   CASES="adam" sbatch examples/models/deepseek_v4/toy_training_hsg.sbatch
 
 #SBATCH --job-name=coreai_dlalgo_llm-mbridge:dsv4-train
-#SBATCH --account=coreai_dlalgo_llm
+#SBATCH --account=coreai_mlperf_training
 #SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=4
 #SBATCH --time=01:30:00
-#SBATCH --output=/lustre/fsw/portfolios/coreai/users/chcui/logs/dsv4_toy_train_%j.log
+#SBATCH --output=/lustre/fsw/portfolios/coreai/projects/coreai_mlperf_training/users/cgomes/dsv4/logs/dsv4_toy_train_%j.log
 #SBATCH --exclusive
 
 set -euo pipefail
 
 CONTAINER_IMAGE=${CONTAINER_IMAGE:-/lustre/fsw/portfolios/coreai/users/weijiac/sqsh/nemo_26.04.sqsh}
-WORKDIR=${WORKDIR:-/lustre/fsw/portfolios/coreai/users/chcui/repos/Megatron-Bridge-dsv4-train}
+WORKDIR=${WORKDIR:-/lustre/fsw/portfolios/coreai/projects/coreai_mlperf_training/users/cgomes/Megatron-Bridge}
 MCORE_DIR=${MCORE_DIR:-/lustre/fsw/portfolios/coreai/users/chcui/repos/Megatron-LM-pr4518}
 FHT_SITE=${FHT_SITE:-/lustre/fsw/portfolios/coreai/users/chcui/parity/dsv4_cudnn_dsa/fast_hadamard_site}
 CUDNN_FE_SITE=${CUDNN_FE_SITE:-/lustre/fsw/portfolios/coreai/users/chcui/parity/dsv4_cudnn_dsa/cudnn_fe_site}
-TRANSFORMERS_SITE=${TRANSFORMERS_SITE:-/lustre/fsw/portfolios/coreai/users/chcui/training/dsv4_transformers_5_8_1_nodeps}
-EMERGING_OPTIMIZERS_SITE=${EMERGING_OPTIMIZERS_SITE:-/lustre/fsw/portfolios/coreai/users/chcui/training/dsv4_emerging_optimizers_0_2_0}
+TRANSFORMERS_SITE=${TRANSFORMERS_SITE:-/lustre/fsw/portfolios/coreai/projects/coreai_mlperf_training/users/cgomes/dsv4_transformers_5_8_1_nodeps}
+EMERGING_OPTIMIZERS_SITE=${EMERGING_OPTIMIZERS_SITE:-/lustre/fsw/portfolios/coreai/projects/coreai_mlperf_training/users/cgomes/dsv4_emerging_optimizers_0_2_0}
 HF_CONFIG=${HF_CONFIG:-/lustre/fsw/portfolios/coreai/users/weijiac/models/deepseek-ai/DeepSeek-V4-Flash}
-OUTDIR=${OUTDIR:-/lustre/fsw/portfolios/coreai/users/chcui/training/dsv4_toy}
-LOGDIR=${LOGDIR:-/lustre/fsw/portfolios/coreai/users/chcui/logs}
+OUTDIR=${OUTDIR:-/lustre/fsw/portfolios/coreai/projects/coreai_mlperf_training/users/cgomes/dsv4/logs/dsv4_toy}
+LOGDIR=${LOGDIR:-/lustre/fsw/portfolios/coreai/projects/coreai_mlperf_training/users/cgomes/dsv4/logs}
 PY_DEPS=${PY_DEPS:-$OUTDIR/python_deps}
+LOAD_CHECKPOINT=${LOAD_CHECKPOINT:-}
+DATADIR=${DATADIR:-/raid/scratch/coreai_mlperf_training/c4}
+DATASET=${DATASET:-8b}
+PREPROC_DATA_DIR=${PREPROC_DATA_DIR:-$DATADIR/$DATASET}
+TOKENIZER_DIR=${TOKENIZER_DIR:-$PREPROC_DATA_DIR/tokenizer}
+NPY_INDEX_DIR=${NPY_INDEX_DIR:-$OUTDIR/npy_index}
 CSA_BACKEND=${CSA_BACKEND:-cudnn_dsa}
 MOE_TOKEN_DISPATCHER_TYPE=${MOE_TOKEN_DISPATCHER_TYPE:-alltoall}
 ADAM_MAX_LR=${ADAM_MAX_LR:-1e-4}
@@ -47,12 +53,16 @@ EXTRA_ARGS=${EXTRA_ARGS:-}
 CASES=${CASES:-"adam muon adam_mxfp8 muon_mxfp8"}
 SEQ_LENGTH=${SEQ_LENGTH:-128}
 TRAIN_ITERS=${TRAIN_ITERS:-3}
+EVAL_INTERVAL=${EVAL_INTERVAL:-$TRAIN_ITERS}
+EVAL_ITERS=${EVAL_ITERS:-1}
 MICRO_BATCH_SIZE=${MICRO_BATCH_SIZE:-1}
 GLOBAL_BATCH_SIZE=${GLOBAL_BATCH_SIZE:-4}
 EXPERT_PARALLEL_SIZE=${EXPERT_PARALLEL_SIZE:-4}
 NPROC_PER_NODE=${NPROC_PER_NODE:-4}
 
-mkdir -p "$LOGDIR" "$OUTDIR"
+mkdir -p "$LOGDIR" "$OUTDIR" "$NPY_INDEX_DIR"
+
+CONTAINER_MOUNTS="/lustre:/lustre,${PREPROC_DATA_DIR}:/preproc_data:ro,${TOKENIZER_DIR}:/tokenizer:ro,${NPY_INDEX_DIR}:/npy_index"
 
 SUMMARY="$OUTDIR/summary_${SLURM_JOB_ID}.txt"
 : > "$SUMMARY"
@@ -66,10 +76,15 @@ echo "transformers_site=$TRANSFORMERS_SITE"
 echo "emerging_optimizers_site=$EMERGING_OPTIMIZERS_SITE"
 echo "hf_config=$HF_CONFIG"
 echo "outdir=$OUTDIR"
+echo "preproc_data_dir=$PREPROC_DATA_DIR"
+echo "tokenizer_dir=$TOKENIZER_DIR"
+echo "npy_index_dir=$NPY_INDEX_DIR"
+echo "load_checkpoint=${LOAD_CHECKPOINT:-<none>}"
 echo "cases=$CASES"
 echo "csa_backend=$CSA_BACKEND"
 echo "moe_token_dispatcher_type=$MOE_TOKEN_DISPATCHER_TYPE"
 echo "seq_length=$SEQ_LENGTH train_iters=$TRAIN_ITERS nproc_per_node=$NPROC_PER_NODE"
+echo "eval_interval=$EVAL_INTERVAL eval_iters=$EVAL_ITERS"
 echo "adam_lr=$ADAM_MAX_LR:$ADAM_MIN_LR adam_weight_decay=$ADAM_WEIGHT_DECAY"
 echo "muon_lr=$MUON_MAX_LR:$MUON_MIN_LR muon_weight_decay=$MUON_WEIGHT_DECAY muon_momentum=$MUON_MOMENTUM"
 echo "muon_optimizer_name=$MUON_OPTIMIZER_NAME muon_scale_mode=$MUON_SCALE_MODE muon_fp32_matmul_prec=$MUON_FP32_MATMUL_PREC"
@@ -88,7 +103,7 @@ for CASE in $CASES; do
   set +e
   srun --ntasks=1 \
     --container-image="$CONTAINER_IMAGE" \
-    --container-mounts=/lustre:/lustre \
+    --container-mounts="$CONTAINER_MOUNTS" \
     --no-container-mount-home \
     bash -lc "
       set -euo pipefail
@@ -136,6 +151,10 @@ import emerging_optimizers
 print('emerging-optimizers:', version, emerging_optimizers.__file__)
 PY
 	      fi
+      load_checkpoint_arg=()
+      if [[ -n \"$LOAD_CHECKPOINT\" ]]; then
+        load_checkpoint_arg=(--load-checkpoint \"$LOAD_CHECKPOINT\")
+      fi
       uv run --no-sync python -m torch.distributed.run \
         --nproc_per_node=$NPROC_PER_NODE \
         --nnodes=1 \
@@ -146,8 +165,14 @@ PY
         --case $CASE \
         --hf-config-path $HF_CONFIG \
         --output-dir $OUTDIR \
+        --data-dir /preproc_data \
+        --dataset-name $DATASET \
+        --tokenizer-model /tokenizer \
+        --path-to-cache /npy_index \
         --seq-length $SEQ_LENGTH \
         --train-iters $TRAIN_ITERS \
+        --eval-interval $EVAL_INTERVAL \
+        --eval-iters $EVAL_ITERS \
         --micro-batch-size $MICRO_BATCH_SIZE \
         --global-batch-size $GLOBAL_BATCH_SIZE \
         --expert-parallel-size $EXPERT_PARALLEL_SIZE \
@@ -166,6 +191,7 @@ PY
         --muon-coefficient-type $MUON_COEFFICIENT_TYPE \
         --muon-optimizer-name $MUON_OPTIMIZER_NAME \
         --muon-extra-scale-factor $MUON_EXTRA_SCALE_FACTOR \
+        \"\${load_checkpoint_arg[@]}\" \
         $MUON_NESTEROV_ARG \
         $EXTRA_ARGS
     " 2>&1 | tee "$case_log"
