@@ -25,6 +25,7 @@ from megatron.bridge.recipes.utils.optimizer_utils import (
     distributed_muon_with_cosine_annealing,
 )
 from megatron.bridge.training.comm_overlap import CommOverlapConfig
+from megatron.bridge.training.config import GPTDatasetConfig
 from megatron.bridge.training.gpt_step import forward_step
 from megatron.bridge.training.mixed_precision import bf16_mixed, bf16_with_mxfp8_mixed
 from megatron.bridge.training.pretrain import pretrain
@@ -274,9 +275,16 @@ def build_config(args: argparse.Namespace):
     else:
         cfg.tokenizer.tokenizer_type = "HuggingFaceTokenizer"
         cfg.tokenizer.tokenizer_model = args.tokenizer_model or str(Path(args.data_dir) / "tokenizer")
-        cfg.tokenizer.hf_tokenizer_kwargs = {"use_fast": True}
-        cfg.dataset.blend_per_split = _c4_blend_per_split(args.data_dir, args.dataset_name)
-        cfg.dataset.path_to_cache = args.path_to_cache
+        cfg.dataset = GPTDatasetConfig(
+            dataloader_type="single",
+            blend_per_split=_c4_blend_per_split(args.data_dir, args.dataset_name),
+            sequence_length=args.seq_length,
+            random_seed=cfg.rng.seed,
+            path_to_cache=args.path_to_cache,
+            reset_position_ids=False,
+            reset_attention_mask=False,
+            eod_mask_loss=False,
+        )
 
     cfg.dataset.seq_length = args.seq_length
     cfg.dataset.num_workers = 0
