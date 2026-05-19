@@ -282,7 +282,6 @@ def build_config(args: argparse.Namespace):
     cfg = _pretrain_common()
     cfg.model = _build_model_provider(args)
     cfg.tokenizer = get_tokenizer_config(args, cfg)
-
     cfg.dataset.blend = None
     if args.data_dir is None:
         cfg.dataset.blend_per_split = None
