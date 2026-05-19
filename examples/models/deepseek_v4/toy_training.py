@@ -220,8 +220,8 @@ def _configure_optimizer_and_precision(cfg, args: argparse.Namespace) -> None:
     case = args.case
     if case.startswith("adam"):
         optimizer_cfg, scheduler_cfg = distributed_fused_adam_with_cosine_annealing(
-            lr_warmup_iters=1,
-            lr_decay_iters=args.train_iters,
+            lr_warmup_iters=args.lr_warmup_iters,
+            lr_decay_iters=args.lr_decay_iters,
             max_lr=args.adam_max_lr,
             min_lr=args.adam_min_lr,
             weight_decay=args.adam_weight_decay,
@@ -310,6 +310,7 @@ def build_config(args: argparse.Namespace):
     cfg.train.manual_gc_eval = 1
     cfg.validation.eval_interval = args.eval_interval if args.eval_iters > 0 and args.eval_interval > 0 else None
     cfg.validation.eval_iters = args.eval_iters
+    cfg.validation.eval_global_batch_size = args.eval_global_batch_size
 
     cfg.logger.log_interval = 1
     cfg.logger.tensorboard_dir = str(Path(args.output_dir) / args.case / "tb")
@@ -343,6 +344,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-iters", type=int, default=3)
     parser.add_argument("--eval-interval", type=int, default=0)
     parser.add_argument("--eval-iters", type=int, default=0)
+    parser.add_argument("--eval-global-batch-size", type=int, default=None)
+    parser.add_argument("--lr-warmup-iters", type=int, default=1)
+    parser.add_argument("--lr-decay-iters", type=int, default=None)
     parser.add_argument("--micro-batch-size", type=int, default=1)
     parser.add_argument("--global-batch-size", type=int, default=4)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)

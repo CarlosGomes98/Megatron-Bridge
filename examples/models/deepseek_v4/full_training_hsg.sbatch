@@ -33,16 +33,19 @@ TOKENIZER_DIR=${TOKENIZER_DIR:-$PREPROC_DATA_DIR/tokenizer}
 NPY_INDEX_DIR=${NPY_INDEX_DIR:-$OUTDIR/npy_index}
 CSA_BACKEND=${CSA_BACKEND:-unfused}
 MOE_TOKEN_DISPATCHER_TYPE=${MOE_TOKEN_DISPATCHER_TYPE:-alltoall}
-ADAM_MAX_LR=${ADAM_MAX_LR:-3e-4}
+ADAM_MAX_LR=${ADAM_MAX_LR:-0.000023238}
 ADAM_MIN_LR=${ADAM_MIN_LR:-5e-6}
-ADAM_WEIGHT_DECAY=${ADAM_WEIGHT_DECAY:-0.01}
+ADAM_WEIGHT_DECAY=${ADAM_WEIGHT_DECAY:-0.1}
+LR_WARMUP_ITERS=${LR_WARMUP_ITERS:-4}
+LR_DECAY_ITERS=${LR_DECAY_ITERS:-11996}
 EXTRA_ARGS=${EXTRA_ARGS:-}
 NCCL_PXN_DISABLE=${NCCL_PXN_DISABLE:-1}
 
 SEQ_LENGTH=${SEQ_LENGTH:-4096}
 TRAIN_ITERS=${TRAIN_ITERS:-100}
-EVAL_INTERVAL=${EVAL_INTERVAL:-$TRAIN_ITERS}
-EVAL_ITERS=${EVAL_ITERS:-1}
+EVAL_INTERVAL=${EVAL_INTERVAL:-0}
+EVAL_ITERS=${EVAL_ITERS:-0}
+EVAL_GLOBAL_BATCH_SIZE=${EVAL_GLOBAL_BATCH_SIZE:-1024}
 MICRO_BATCH_SIZE=${MICRO_BATCH_SIZE:-1}
 GLOBAL_BATCH_SIZE=${GLOBAL_BATCH_SIZE:-15360}
 TP=${TP:-1}
@@ -86,6 +89,8 @@ echo "py_deps=$PY_DEPS"
 echo "csa_backend=$CSA_BACKEND"
 echo "moe_token_dispatcher_type=$MOE_TOKEN_DISPATCHER_TYPE"
 echo "adam_lr=$ADAM_MAX_LR:$ADAM_MIN_LR adam_weight_decay=$ADAM_WEIGHT_DECAY"
+echo "lr_warmup_iters=$LR_WARMUP_ITERS lr_decay_iters=$LR_DECAY_ITERS"
+echo "eval_global_batch_size=$EVAL_GLOBAL_BATCH_SIZE"
 echo "extra_args=$EXTRA_ARGS"
 echo "nccl_pxn_disable=$NCCL_PXN_DISABLE"
 
@@ -135,6 +140,9 @@ srun --mpi=pmix \
       --train-iters $TRAIN_ITERS \
       --eval-interval $EVAL_INTERVAL \
       --eval-iters $EVAL_ITERS \
+      --eval-global-batch-size $EVAL_GLOBAL_BATCH_SIZE \
+      --lr-warmup-iters $LR_WARMUP_ITERS \
+      --lr-decay-iters $LR_DECAY_ITERS \
       --micro-batch-size $MICRO_BATCH_SIZE \
       --global-batch-size $GLOBAL_BATCH_SIZE \
       --tensor-parallel-size $TP \
