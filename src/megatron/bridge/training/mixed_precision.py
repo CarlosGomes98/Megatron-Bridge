@@ -48,7 +48,7 @@ class MixedPrecisionConfig:
     # fp8 related
     fp8: Optional[str] = None
     fp8_recipe: str = (
-        "tensorwise"  # "tensorwise", "delayed", "mxfp8" (for Blackwell only), "blockwise" (for Hopper only)
+        "delayed"  # "tensorwise", "delayed", "mxfp8" (for Blackwell only), "blockwise" (for Hopper only)
     )
     fp8_recipe_attrs: Optional[dict[str, Any]] = None
     fp8_quantizer_factory: Optional[str] = None
@@ -416,6 +416,8 @@ def bf16_with_nvfp4_mixed() -> MixedPrecisionConfig:
     cfg.fp8 = None
     cfg.fp4 = "e2m1"
     cfg.fp4_recipe = "nvfp4"
+    # NVFP4 params need the distributed optimizer to hold FP32 main params and grads.
+    cfg.fp8_recipe = "tensorwise"
     cfg.fp8_param_gather = False
     cfg.fp4_param_gather = True
     return cfg

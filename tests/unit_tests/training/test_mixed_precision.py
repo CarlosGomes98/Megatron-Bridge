@@ -479,6 +479,26 @@ class TestMixedPrecisionRecipes:
         # Base BF16 recipe should have fp8_param as False
         assert config.fp8_param is False
         assert config.fp8_param_gather is False
+        assert config.fp8 is None
+        assert config.fp8_recipe == "delayed"
+
+    @pytest.mark.parametrize(
+        "recipe_fn, expected",
+        [(bf16_mixed, True), (fp16_mixed, True), (bf16_with_nvfp4_mixed, False)],
+    )
+    def test_precision_aware_optimizer_decoupled_grads(self, recipe_fn, expected):
+        config = recipe_fn()
+        config.finalize()
+        optimizer_config = OptimizerConfig(
+            optimizer="adam",
+            use_distributed_optimizer=True,
+            use_precision_aware_optimizer=True,
+            main_params_dtype=torch.float32,
+            main_grads_dtype=torch.bfloat16,
+        )
+        update_config_with_precision_overrides(config, optimizer_config)
+
+        assert optimizer_config.use_precision_aware_optimizer_no_fp8_or_ds_fp8 is expected
 
     def test_fp16_mixed(self):
         config = fp16_mixed()
@@ -636,6 +656,7 @@ class TestMixedPrecisionRecipes:
         assert config.fp8 is None
         assert config.fp4 == "e2m1"
         assert config.fp4_recipe == "nvfp4"
+        assert config.fp8_recipe == "tensorwise"
         assert config.fp8_param_gather is False
 
     def test_fp16_with_fp8_subchannel_scaling_mixed(self):

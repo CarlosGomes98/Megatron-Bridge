@@ -1530,7 +1530,7 @@ def translate_bridge_to_mlm(overrides: dict[str, Any]) -> ReverseTranslationResu
                 result.add_arg("fp16")
         if mp_fp8:
             result.add_arg("fp8-format", mp_fp8)
-            if mp_fp8_recipe and mp_fp8_recipe != "tensorwise":
+            if mp_fp8_recipe and mp_fp8_recipe != "delayed":
                 result.add_arg("fp8-recipe", mp_fp8_recipe)
             if mp_fp8_wgrad is False:
                 result.add_arg("no-fp8-wgrad")
